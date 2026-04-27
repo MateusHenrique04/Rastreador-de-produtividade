@@ -1,0 +1,39 @@
+{
+  "app_rules": [
+    {
+      "match": ["audiobook pro"],
+      "app": "Estudo (Audiobook)"
+    },
+    {
+      "match": ["youtube"],
+      "app": "YouTube"
+    },
+    {
+      "match": ["visual studio", "code"],
+      "app": "VS Code"
+    },
+    {
+      "match": ["gmail"],
+      "app": "Email"
+    },
+    {
+      "match": ["brave", "chrome"],
+      "app": "Navegador"
+    }
+  ],
+
+  "content_rules": [
+    {
+      "match": ["curso", "aula", "python", "PODCAST 3"],
+      "category": "Estudo"
+    },
+    {
+      "match": ["podcast", "debate", "entrevista", "Bíblia"],
+      "category": "Aprendizado leve"
+    },
+    {
+      "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO"],
+      "category": "Entretenimento"
+    }
+  ]
+}

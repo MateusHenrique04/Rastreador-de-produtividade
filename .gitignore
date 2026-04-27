@@ -1,0 +1,17 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+
+# Database file
+tracker.db
+tracker.log
+
+dashboard.html
+
+# VS Code workspace settings
+.vscode/
+.DS_Store
