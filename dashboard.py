@@ -65,12 +65,11 @@ def process_data(rows):
     return screen_by_date, audio_by_date, audio_details, hour_buckets
 
 def classify(app, context):
-    import sys, os
-    sys.path.insert(0, os.path.dirname(__file__))
     try:
         from classifier import classify_context
         return classify_context(app, context)
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] classify falhou: {e}")  # ← mostre o erro!
         return "Outros"
 
 def fmt(seconds):
