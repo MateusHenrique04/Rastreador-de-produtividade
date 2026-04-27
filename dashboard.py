@@ -12,11 +12,14 @@ MIN_GAP = 5
 
 CATEGORY_COLORS = {
     "Estudo":               "#4ade80",
+    "Estudo (Audiobook)":   "#4ade80",  
     "Aprendizado leve":     "#60a5fa",
     "Entretenimento":       "#f87171",
     "Produtivo":            "#a78bfa",
-    "YouTube (não classificado)": "#fb923c",
-    "Outros":               "#94a3b8",
+    "YouTube":              "#fb923c",
+    "Navegador":            "#94a3b8",
+    "VS Code":              "#60a5fa",
+    "Outros":               "#334155",
 }
 
 def fetch_all_data():
@@ -54,6 +57,9 @@ def process_data(rows):
             # try classify
             cat = classify(app, context)
             audio_by_date[day][cat]   += diff
+            # incluir também no gráfico de tela por app
+            screen_by_date[day][app] += diff
+            hour_buckets[hour][app]  += diff
 
     return screen_by_date, audio_by_date, audio_details, hour_buckets
 
@@ -339,7 +345,15 @@ new Chart(document.getElementById('screenChart'), {{
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }} }},
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }},
+      tooltip: {{
+        callbacks: {{
+          title: () => [],
+          label: ctx => `${{ctx.dataset.label}}: ${{parseFloat(ctx.parsed.y.toFixed(1))}} min`
+        }}
+      }}
+    }},
     scales: {{
       x: {{ stacked: true, grid: {{ display: false }} }},
       y: {{ stacked: true, ticks: {{ callback: v => v + 'min' }}, grid: {{ color: '#1f2535' }} }}
@@ -356,7 +370,15 @@ new Chart(document.getElementById('audioChart'), {{
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }} }},
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }},
+      tooltip: {{
+        callbacks: {{
+          title: () => [],
+          label: ctx => `${{ctx.dataset.label}}: ${{parseFloat(ctx.parsed.y.toFixed(1))}} min`
+        }}
+      }}
+    }},
     scales: {{
       x: {{ stacked: true, grid: {{ display: false }} }},
       y: {{ stacked: true, ticks: {{ callback: v => v + 'min' }}, grid: {{ color: '#1f2535' }} }}
@@ -373,7 +395,15 @@ new Chart(document.getElementById('hourChart'), {{
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }} }},
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }},
+      tooltip: {{
+        callbacks: {{
+          title: () => [],
+          label: ctx => `${{ctx.dataset.label}}: ${{parseFloat(ctx.parsed.y.toFixed(1))}} min`
+        }}
+      }}
+    }},
     scales: {{
       x: {{ stacked: true, grid: {{ display: false }}, ticks: {{ maxTicksLimit: 12 }} }},
       y: {{ stacked: true, ticks: {{ callback: v => v + 'min' }}, grid: {{ color: '#1f2535' }} }}
