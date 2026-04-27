@@ -34,6 +34,14 @@ def split_app_context(title: str) -> tuple[str, str]:
             if keyword.lower() in title_lower:
                 return rule["app"], title
 
+    # Fallback para títulos de música que aparecem como "Artista - Faixa"
+    if " - " in title and not any(block in title_lower for block in [
+        "chrome", "brave", "visual studio", "code", "youtube",
+        "audiobook", "desktop", "explorer", "word", "excel",
+        "powerpoint", "notepad"
+    ]):
+        return "Spotify", title
+
     return "Outros", title
 
 
@@ -52,9 +60,11 @@ def classify_context(app: str, context: str) -> str:
         return "Produtivo"
     if app == "YouTube":
         return "YouTube (não classificado)"
+    if app == "Spotify":
+        return "Entretenimento"
 
     return "Outros"
 
 
 def is_audio_app(app: str) -> bool:
-    return app in ["YouTube", "Estudo (Audiobook)"]
+    return app in ["YouTube", "Spotify", "Estudo (Audiobook)"]

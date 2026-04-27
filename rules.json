@@ -1,44 +1,49 @@
 {
   "app_rules": [
     {
-      "match": ["audiobook pro"],
+      "match": [
+        "audiobook pro", 
+        "audiobook", 
+        "Dashboard de leitura", 
+        "Grifos do livro", 
+        "Dicionario", 
+        "Historico de sessa"
+      ],
       "app": "Estudo (Audiobook)"
     },
     {
-      "match": ["youtube"],
-      "app": "YouTube"
+      "match": ["visual studio", "code", "tracker.py", "classifier.py"],
+      "app": "VS Code"
     },
     {
-      "match": ["visual studio", "code"],
-      "app": "VS Code"
+      "match": ["youtube", "spotify", "music"],
+      "app": "YouTube/Streaming"
+    },
+    {
+      "match": ["brave", "chrome", "gemini.google.com", "dashboard"],
+      "app": "Navegador"
+    },
+    {
+      "match": ["este computador", "downloads", "documentos", "explorador", "abrir", "salvar como"],
+      "app": "Sistema/Arquivos"
+    },
+    {
+      "match": ["discord"],
+      "app": "Discord"
+    },
+    {
+      "match": ["valorant"],
+      "app": "Valorant"
     },
     {
       "match": ["gmail"],
       "app": "Email"
-    },
-    {
-      "match": ["brave", "chrome"],
-      "app": "Navegador"
-    },
-    {
-        "match": ["spotify"],
-        "app": "Spotify"
-    },
-    {
-        "match": ["discord"],
-        "app": "Discord"
-    },
-
-    {
-        "match":["claude"],
-        "app": "Claude"
     }
-    
   ],
 
   "content_rules": [
     {
-      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck"],
+      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck", "audiobook"],
       "category": "Estudo"
     },
     {
@@ -46,7 +51,7 @@
       "category": "Aprendizado leve"
     },
     {
-      "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO", "TALKZAM", "Pokémon", "Minecraft", "GTA", "FIFA", "Fortnite", "Call of Duty", "Valorant", "League of Legends", "CASTRINHO"],
+      "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO", "TALKZAM", "Pokémon", "Minecraft", "GTA", "FIFA", "Fortnite", "Call of Duty", "Valorant", "League of Legends", "CASTRINHO", "Cariani"],
       "category": "Entretenimento"
     }
   ]

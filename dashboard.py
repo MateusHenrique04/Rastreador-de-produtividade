@@ -19,6 +19,7 @@ CATEGORY_COLORS = {
     "YouTube":              "#fb923c",
     "Navegador":            "#94a3b8",
     "VS Code":              "#60a5fa",
+    "Spotify":              "#FFC1C1",
     "Outros":               "#334155",
 }
 
