@@ -100,6 +100,13 @@ def track():
                 now = datetime.now()
                 idle = get_idle_seconds()
 
+                # ── Suprime AFK enquanto Valorant está em foco ─────────────────
+                # O Vanguard pode bloquear GetLastInputInfo e gerar falso AFK
+                _title_check = get_active_window()
+                _app_check, _ = split_app_context(_title_check)
+                if _app_check == "Valorant":
+                    idle = 0.0
+
                 # ── Transição ATIVO → AFK ──────────────────────────────────────
                 if not is_afk and idle >= AFK_THRESHOLD:
                     is_afk = True
@@ -119,26 +126,19 @@ def track():
                     # Reseta estado de áudio para não inflar contagem com tempo AFK
                     last_audio_app = last_audio_ctx = last_audio_seen = None
 
-                # ── Se AFK: registra log de tela (para não criar gap > MAX_GAP_SECONDS)
-                # mas NÃO registra áudio (não houve consumo real de conteúdo)
+                # ── Se AFK: não registra logs de tela/áudio ────────────────────
                 if is_afk:
-                    # Após AFK_AUDIO_CUTOFF, para de contar completamente
+                    # Após AFK_AUDIO_CUTOFF, garante reset do estado de áudio
                     if afk_start:
                         afk_duration = (now - afk_start).total_seconds()
                         if afk_duration >= AFK_AUDIO_CUTOFF:
                             last_audio_app = last_audio_ctx = last_audio_seen = None
-                            time.sleep(POLL_INTERVAL)
-                            continue
-
-                    # Registra tela com app atual para manter continuidade dos logs
-                    title = get_active_window()
-                    app, context = split_app_context(title)
-                    save_log(conn, "screen", app, context, now)
                     time.sleep(POLL_INTERVAL)
                     continue
 
                 # ── Rastreamento normal (usuário ativo) ────────────────────────
-                title = get_active_window()
+                # Reutiliza title/app já capturados acima (antes do bloco AFK)
+                title = _title_check
                 app, context = split_app_context(title)
                 save_log(conn, "screen", app, context, now)
 
