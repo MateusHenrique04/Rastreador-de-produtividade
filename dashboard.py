@@ -19,19 +19,6 @@ CATEGORY_COLORS = {
     "Outros":               "#94a3b8",
 }
 
-SCREEN_CATEGORIES = {
-    "VS Code":              ("Estudo",    "#4ade80"),
-    "YouTube":              ("Diversão",  "#f87171"),
-    "Navegador":            ("Outros",    "#94a3b8"),
-    "Email":                ("Outros",    "#94a3b8"),
-    "Discord":              ("Diversão",  "#f87171"),
-    "Stardew Valley":       ("Diversão",  "#f87171"),
-    "Valorant":             ("Diversão",  "#f87171"),
-    "Spotify":              ("Diversão",  "#f87171"),
-    "Claude":               ("Estudo",    "#4ade80"),
-}
-SCREEN_CAT_DEFAULT = ("Outros", "#94a3b8")
-
 def fetch_all_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -40,12 +27,13 @@ def fetch_all_data():
     conn.close()
     return rows
 
-def process_data(rows, latest_day=None):
-    screen_by_date      = defaultdict(lambda: defaultdict(float))
-    screen_cat_by_date  = defaultdict(lambda: defaultdict(float))
-    audio_by_date       = defaultdict(lambda: defaultdict(float))
-    audio_details       = defaultdict(float)
-    hour_buckets        = defaultdict(lambda: defaultdict(float))
+def process_data(rows):
+    screen_by_date  = defaultdict(lambda: defaultdict(float))
+    audio_by_date   = defaultdict(lambda: defaultdict(float))
+    audio_details   = defaultdict(float)
+    hour_buckets    = defaultdict(lambda: defaultdict(float))
+
+    today = date.today().isoformat()
 
     for i in range(len(rows) - 1):
         log_type, app, context, t1 = rows[i]
@@ -61,10 +49,8 @@ def process_data(rows, latest_day=None):
 
         if log_type == "screen":
             screen_by_date[day][app] += diff
-            cat, _ = SCREEN_CATEGORIES.get(app, SCREEN_CAT_DEFAULT)
-            screen_cat_by_date[day][cat] += diff
-            if latest_day is None or day == latest_day:
-                hour_buckets[hour][app] += diff
+            if day == today:
+                hour_buckets[hour][app]  += diff
         elif log_type == "audio":
             ctx_clean = context.split(" - ")[0][:80]
             audio_details[ctx_clean]  += diff
@@ -72,15 +58,7 @@ def process_data(rows, latest_day=None):
             cat = classify(app, context)
             audio_by_date[day][cat]   += diff
 
-    return screen_by_date, screen_cat_by_date, audio_by_date, audio_details, hour_buckets
-
-def fetch_latest_day():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT MAX(date(timestamp)) FROM logs")
-    result = c.fetchone()[0]
-    conn.close()
-    return result
+    return screen_by_date, audio_by_date, audio_details, hour_buckets
 
 def classify(app, context):
     import sys, os
@@ -96,7 +74,7 @@ def fmt(seconds):
     m = int((seconds % 3600) // 60)
     return f"{h}h {m}min"
 
-def generate_html(screen_by_date, screen_cat_by_date, audio_by_date, audio_details, hour_buckets, latest_day=None):
+def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets):
     all_days = sorted(set(list(screen_by_date.keys()) + list(audio_by_date.keys())))
 
     # Build JS-ready data
@@ -111,18 +89,6 @@ def generate_html(screen_by_date, screen_cat_by_date, audio_by_date, audio_detai
             "label": app,
             "data": [round(screen_by_date[d].get(app, 0) / 60, 1) for d in all_days],
             "backgroundColor": APP_COLORS[idx % len(APP_COLORS)],
-            "borderRadius": 6,
-        })
-
-    # Tela por categoria
-    all_screen_cats = sorted({cat for d in screen_cat_by_date.values() for cat in d})
-    SCAT_COLORS = {"Estudo": "#4ade80", "Diversão": "#f87171", "Produtivo": "#a78bfa", "Outros": "#94a3b8"}
-    screen_cat_datasets = []
-    for cat in all_screen_cats:
-        screen_cat_datasets.append({
-            "label": cat,
-            "data": [round(screen_cat_by_date[d].get(cat, 0) / 60, 1) for d in all_days],
-            "backgroundColor": SCAT_COLORS.get(cat, "#94a3b8"),
             "borderRadius": 6,
         })
 
@@ -165,7 +131,6 @@ def generate_html(screen_by_date, screen_cat_by_date, audio_by_date, audio_detai
     )
     top_content  = top_audio[0][0][:30] + "…" if top_audio else "—"
 
-    latest_day_fmt = "/".join(reversed(latest_day.split("-"))) if latest_day else "—"
     html = f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -332,34 +297,28 @@ def generate_html(screen_by_date, screen_cat_by_date, audio_by_date, audio_detai
     </div>
   </div>
 
-  <!-- Linha 1: Tela por app + Tela por categoria -->
+  <!-- Linha 1: Comparação por dia -->
   <div class="grid-2">
     <div class="panel">
       <div class="panel-title">Tela por app · por dia</div>
       <div class="chart-wrap"><canvas id="screenChart"></canvas></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Tela por categoria · por dia</div>
-      <div class="chart-wrap"><canvas id="screenCatChart"></canvas></div>
-    </div>
-  </div>
-
-  <!-- Linha 2: Áudio por categoria + Timeline do dia -->
-  <div class="grid-2">
-    <div class="panel">
       <div class="panel-title">Áudio por categoria · por dia</div>
       <div class="chart-wrap"><canvas id="audioChart"></canvas></div>
     </div>
-    <div class="panel">
-      <div class="panel-title">Atividade por hora · <span style="color:var(--accent)">{latest_day_fmt}</span></div>
-      <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
-    </div>
   </div>
 
-  <!-- Linha 3: Top conteúdos (largura total) -->
-  <div class="panel">
-    <div class="panel-title">Top conteúdos assistidos</div>
-    <div class="top-list" id="topList"></div>
+  <!-- Linha 2: Timeline do dia + Top conteúdos -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">Atividade por hora · hoje</div>
+      <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Top conteúdos assistidos</div>
+      <div class="top-list" id="topList"></div>
+    </div>
   </div>
 
 </main>
@@ -380,23 +339,6 @@ new Chart(document.getElementById('screenChart'), {{
   data: {{
     labels: days.map(d => d.slice(5)),
     datasets: {json.dumps(screen_datasets)}
-  }},
-  options: {{
-    responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, padding: 14, font: {{ size: 11 }} }} }} }},
-    scales: {{
-      x: {{ stacked: true, grid: {{ display: false }} }},
-      y: {{ stacked: true, ticks: {{ callback: v => v + 'min' }}, grid: {{ color: '#1f2535' }} }}
-    }}
-  }}
-}});
-
-// ── Tela por categoria ──
-new Chart(document.getElementById('screenCatChart'), {{
-  type: 'bar',
-  data: {{
-    labels: days.map(d => d.slice(5)),
-    datasets: {json.dumps(screen_cat_datasets)}
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
@@ -469,9 +411,8 @@ labels.forEach((label, i) => {{
 
 def main():
     rows = fetch_all_data()
-    latest_day = fetch_latest_day()
-    screen_by_date, screen_cat_by_date, audio_by_date, audio_details, hour_buckets = process_data(rows, latest_day)
-    html = generate_html(screen_by_date, screen_cat_by_date, audio_by_date, audio_details, hour_buckets, latest_day)
+    screen_by_date, audio_by_date, audio_details, hour_buckets = process_data(rows)
+    html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets)
 
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
     with open(out, "w", encoding="utf-8") as f:

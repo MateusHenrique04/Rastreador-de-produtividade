@@ -1,41 +1,19 @@
 import json
-import os
 
 RULES_FILE = "rules.json"
 
 _rules_cache = None
-_rules_mtime = 0.0
 
 
 def _load_rules():
-    global _rules_cache, _rules_mtime
-    try:
-        mtime = os.path.getmtime(RULES_FILE)
-    except OSError:
-        mtime = 0.0
-
-    if _rules_cache is None or mtime != _rules_mtime:
+    global _rules_cache
+    if _rules_cache is None:
         with open(RULES_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-        if "app_rules" not in data:
-            raise ValueError("rules.json deve conter a chave 'app_rules'")
-        if "content_rules" not in data:
-            raise ValueError("rules.json deve conter a chave 'content_rules'")
-        for rule in data["app_rules"]:
-            if "match" not in rule:
-                raise ValueError(f"Regra de app sem campo 'match': {rule}")
-        for rule in data["content_rules"]:
-            if "category" not in rule:
-                raise ValueError(f"Regra de conteúdo sem campo 'category': {rule}")
-
         _rules_cache = {
             "app_rules": data["app_rules"],
             "content_rules": data["content_rules"],
-            "screen_category_rules": data.get("screen_category_rules", []),
         }
-        _rules_mtime = mtime
-
     return _rules_cache
 
 
@@ -45,10 +23,6 @@ def get_app_rules():
 
 def get_content_rules():
     return _load_rules()["content_rules"]
-
-
-def get_screen_category_rules():
-    return _load_rules()["screen_category_rules"]
 
 
 def split_app_context(title: str) -> tuple[str, str]:
@@ -82,13 +56,38 @@ def classify_context(app: str, context: str) -> str:
     return "Outros"
 
 
-def classify_app_category(app: str) -> str:
-    """Classifica um app de tela em uma categoria (definida em screen_category_rules)."""
-    for rule in get_screen_category_rules():
-        if rule["app"] == app:
-            return rule["category"]
-    return "Outros"
-
-
 def is_audio_app(app: str) -> bool:
     return app in ["YouTube", "Estudo (Audiobook)"]
+
+
+def is_actually_playing_audio(process_keywords: list[str]) -> bool:
+    """
+    Retorna True se algum processo da lista está com sessão de áudio ativa
+    (ou seja, está realmente reproduzindo som agora).
+
+    Usa a API de sessões de áudio do Windows (pycaw).
+    Se pycaw não estiver instalado, cai num fallback que checa apenas
+    se o processo está rodando — menos preciso, mas sem crash.
+    """
+    try:
+        from pycaw.pycaw import AudioUtilities
+        sessions = AudioUtilities.GetAllSessions()
+        for session in sessions:
+            if session.Process is None:
+                continue
+            name = session.Process.name().lower()
+            state = session.State  # 0=inactive, 1=active, 2=expired
+            if state == 1 and any(kw.lower() in name for kw in process_keywords):
+                return True
+        return False
+    except Exception:
+        # Fallback: verifica só se o processo existe (sem checar se toca áudio)
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                name = proc.info["name"].lower()
+                if any(kw.lower() in name for kw in process_keywords):
+                    return True
+        except Exception:
+            pass
+        return False
