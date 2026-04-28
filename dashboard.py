@@ -2,6 +2,7 @@ import sqlite3
 import json
 import webbrowser
 import os
+import sys
 import tempfile
 from collections import defaultdict
 from datetime import datetime, date, timedelta
@@ -36,7 +37,10 @@ def process_data(rows):
     weekly_hours    = defaultdict(lambda: defaultdict(float))
 
     today = date.today().isoformat()
-    week_start = (date.today() - timedelta(days=6)).isoformat()
+    # Semana atual: sempre de segunda-feira até domingo
+    _today = date.today()
+    week_monday = _today - timedelta(days=_today.weekday())  # weekday(): 0=Seg, 6=Dom
+    week_start = week_monday.isoformat()
 
     for i in range(len(rows) - 1):
         log_type, app, context, t1 = rows[i]
@@ -136,21 +140,20 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
     )
     top_content  = top_audio[0][0][:30] + "…" if top_audio else "—"
 
-    # Weekly comparison: last 7 days, each day = one line across hours 00-23
-    week_days = [(date.today() - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    # Weekly comparison: Seg → Dom da semana atual (atualiza automaticamente a cada semana)
+    _today = date.today()
+    _monday = _today - timedelta(days=_today.weekday())  # weekday() 0=Seg, 6=Dom
+    week_days = [(_monday + timedelta(days=i)).isoformat() for i in range(7)]  # Seg..Dom
     WEEK_COLORS = ["#a78bfa","#60a5fa","#4ade80","#fb923c","#f87171","#fbbf24","#94a3b8"]
-    DAY_NAMES_PT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
+    WEEKDAY_NAMES = {0:"Seg",1:"Ter",2:"Qua",3:"Qui",4:"Sex",5:"Sáb",6:"Dom"}
 
     weekly_datasets = []
     for idx, day in enumerate(week_days):
         label_date = datetime.fromisoformat(day)
-        day_name = DAY_NAMES_PT[label_date.weekday() if label_date.weekday() < 6 else 6]
-        # sunday fix: Python weekday() returns 6 for sunday
-        weekday_map = {0:"Seg",1:"Ter",2:"Qua",3:"Qui",4:"Sex",5:"Sáb",6:"Dom"}
-        day_name = weekday_map[label_date.weekday()]
+        day_name = WEEKDAY_NAMES[label_date.weekday()]
         short_label = f"{day_name} {label_date.strftime('%d/%m')}"
-        is_today = day == date.today().isoformat()
-        color = WEEK_COLORS[idx % len(WEEK_COLORS)]
+        is_today = day == _today.isoformat()
+        color = WEEK_COLORS[idx]
         weekly_datasets.append({
             "label": short_label + (" ·hoje" if is_today else ""),
             "data": [round(weekly_hours[day].get(h, 0) / 60, 1) for h in all_hours],
@@ -476,7 +479,12 @@ def main():
     screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours = process_data(rows)
     html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours)
 
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    out = os.path.join(base_dir, "dashboard.html")
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
 

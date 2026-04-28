@@ -6,7 +6,7 @@ import ctypes
 from classifier import split_app_context, is_audio_app, is_actually_playing_audio
 
 DB_NAME = "tracker.db"
-AUDIO_BACKGROUND_TIMEOUT = 30   # segundos sem foco antes de parar de contar áudio
+AUDIO_BACKGROUND_TIMEOUT = 6   # segundos sem foco antes de parar de contar áudio
 POLL_INTERVAL = 5               # intervalo de polling em segundos
 AFK_THRESHOLD = 60              # segundos sem input para considerar AFK
 AFK_AUDIO_CUTOFF = 15 * 60      # 15 min AFK → para de contar tela e áudio
@@ -119,13 +119,21 @@ def track():
                     # Reseta estado de áudio para não inflar contagem com tempo AFK
                     last_audio_app = last_audio_ctx = last_audio_seen = None
 
-                # ── Se AFK: não registra logs de tela/áudio ────────────────────
+                # ── Se AFK: registra log de tela (para não criar gap > MAX_GAP_SECONDS)
+                # mas NÃO registra áudio (não houve consumo real de conteúdo)
                 if is_afk:
-                    # Após AFK_AUDIO_CUTOFF, garante reset do estado de áudio
+                    # Após AFK_AUDIO_CUTOFF, para de contar completamente
                     if afk_start:
                         afk_duration = (now - afk_start).total_seconds()
                         if afk_duration >= AFK_AUDIO_CUTOFF:
                             last_audio_app = last_audio_ctx = last_audio_seen = None
+                            time.sleep(POLL_INTERVAL)
+                            continue
+
+                    # Registra tela com app atual para manter continuidade dos logs
+                    title = get_active_window()
+                    app, context = split_app_context(title)
+                    save_log(conn, "screen", app, context, now)
                     time.sleep(POLL_INTERVAL)
                     continue
 

@@ -44,7 +44,7 @@
 
   "content_rules": [
     {
-      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck", "eleições", "três elementos", "Audiobook PRO"],
+      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck", "eleições", "três elementos", "Audiobook PRO", "opressor", "oprimido", "preconceito", "discriminação", "injustiça", "desigualdade", "Professor" ],
       "category": "Estudo"
     },
     {
