@@ -21,17 +21,16 @@
       "app": "Navegador"
     },
     {
-        "match": ["spotify"],
-        "app": "Spotify"
+      "match": ["spotify"],
+      "app": "Spotify"
     },
     {
-        "match": ["discord"],
-        "app": "Discord"
+      "match": ["discord"],
+      "app": "Discord"
     },
-
     {
-        "match":["claude"],
-        "app": "Claude"
+      "match": ["claude"],
+      "app": "Claude"
     },
     {
       "match": ["stardew valley"],
@@ -55,6 +54,45 @@
     {
       "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO", "TALKZAM", "Pokémon", "Minecraft", "GTA", "FIFA", "Fortnite", "Call of Duty", "Valorant", "League of Legends", "CASTRINHO", "stardew valley"],
       "category": "Entretenimento"
+    }
+  ],
+
+  "screen_category_rules": [
+    {
+      "app": "VS Code",
+      "category": "Estudo"
+    },
+    {
+      "app": "Email",
+      "category": "Estudo"
+    },
+    {
+      "app": "Claude",
+      "category": "Estudo"
+    },
+    {
+      "app": "Estudo (Audiobook)",
+      "category": "Estudo"
+    },
+    {
+      "app": "Discord",
+      "category": "Diversão"
+    },
+    {
+      "app": "Stardew Valley",
+      "category": "Diversão"
+    },
+    {
+      "app": "Valorant",
+      "category": "Diversão"
+    },
+    {
+      "app": "Spotify",
+      "category": "Música"
+    },
+    {
+      "app": "Navegador",
+      "category": "Outros"
     }
   ]
 }

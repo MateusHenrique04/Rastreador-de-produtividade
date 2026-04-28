@@ -1,19 +1,41 @@
 import json
+import os
 
 RULES_FILE = "rules.json"
 
 _rules_cache = None
+_rules_mtime = 0.0
 
 
 def _load_rules():
-    global _rules_cache
-    if _rules_cache is None:
+    global _rules_cache, _rules_mtime
+    try:
+        mtime = os.path.getmtime(RULES_FILE)
+    except OSError:
+        mtime = 0.0
+
+    if _rules_cache is None or mtime != _rules_mtime:
         with open(RULES_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if "app_rules" not in data:
+            raise ValueError("rules.json deve conter a chave 'app_rules'")
+        if "content_rules" not in data:
+            raise ValueError("rules.json deve conter a chave 'content_rules'")
+        for rule in data["app_rules"]:
+            if "match" not in rule:
+                raise ValueError(f"Regra de app sem campo 'match': {rule}")
+        for rule in data["content_rules"]:
+            if "category" not in rule:
+                raise ValueError(f"Regra de conteúdo sem campo 'category': {rule}")
+
         _rules_cache = {
             "app_rules": data["app_rules"],
             "content_rules": data["content_rules"],
+            "screen_category_rules": data.get("screen_category_rules", []),
         }
+        _rules_mtime = mtime
+
     return _rules_cache
 
 
@@ -23,6 +45,10 @@ def get_app_rules():
 
 def get_content_rules():
     return _load_rules()["content_rules"]
+
+
+def get_screen_category_rules():
+    return _load_rules()["screen_category_rules"]
 
 
 def split_app_context(title: str) -> tuple[str, str]:
@@ -53,6 +79,14 @@ def classify_context(app: str, context: str) -> str:
     if app == "YouTube":
         return "YouTube (não classificado)"
 
+    return "Outros"
+
+
+def classify_app_category(app: str) -> str:
+    """Classifica um app de tela em uma categoria (definida em screen_category_rules)."""
+    for rule in get_screen_category_rules():
+        if rule["app"] == app:
+            return rule["category"]
     return "Outros"
 
 
