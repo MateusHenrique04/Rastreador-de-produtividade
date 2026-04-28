@@ -1,0 +1,21 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+
+# Database file
+tracker.db
+tracker.log
+
+# Ignore local scripts
+alterar.py
+outro.py
+
+dashboard.html
+
+# VS Code workspace settings
+.vscode/
+.DS_Store
