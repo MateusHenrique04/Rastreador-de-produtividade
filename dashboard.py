@@ -32,8 +32,11 @@ def process_data(rows):
     audio_by_date   = defaultdict(lambda: defaultdict(float))
     audio_details   = defaultdict(float)
     hour_buckets    = defaultdict(lambda: defaultdict(float))
+    # weekly: {day_iso: {hour_str: total_screen_seconds}}
+    weekly_hours    = defaultdict(lambda: defaultdict(float))
 
     today = date.today().isoformat()
+    week_start = (date.today() - timedelta(days=6)).isoformat()
 
     for i in range(len(rows) - 1):
         log_type, app, context, t1 = rows[i]
@@ -51,6 +54,8 @@ def process_data(rows):
             screen_by_date[day][app] += diff
             if day == today:
                 hour_buckets[hour][app]  += diff
+            if day >= week_start:
+                weekly_hours[day][hour] += diff
         elif log_type == "audio":
             ctx_clean = context.split(" - ")[0][:80]
             audio_details[ctx_clean]  += diff
@@ -58,7 +63,7 @@ def process_data(rows):
             cat = classify(app, context)
             audio_by_date[day][cat]   += diff
 
-    return screen_by_date, audio_by_date, audio_details, hour_buckets
+    return screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours
 
 def classify(app, context):
     import sys, os
@@ -74,7 +79,7 @@ def fmt(seconds):
     m = int((seconds % 3600) // 60)
     return f"{h}h {m}min"
 
-def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets):
+def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours):
     all_days = sorted(set(list(screen_by_date.keys()) + list(audio_by_date.keys())))
 
     # Build JS-ready data
@@ -110,7 +115,7 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets):
         "#34d399","#38bdf8","#c084fc","#f472b6","#facc15","#94a3b8"
     ][:len(top_audio)])
 
-    # Hour timeline
+    # Hour timeline (today)
     all_hours = [f"{str(h).zfill(2)}:00" for h in range(0, 24)]
     hour_apps = sorted({app for h in hour_buckets.values() for app in h})
     hour_datasets = []
@@ -130,6 +135,32 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets):
         key=lambda x: x[1], default=("—", 0)
     )
     top_content  = top_audio[0][0][:30] + "…" if top_audio else "—"
+
+    # Weekly comparison: last 7 days, each day = one line across hours 00-23
+    week_days = [(date.today() - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    WEEK_COLORS = ["#a78bfa","#60a5fa","#4ade80","#fb923c","#f87171","#fbbf24","#94a3b8"]
+    DAY_NAMES_PT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
+
+    weekly_datasets = []
+    for idx, day in enumerate(week_days):
+        label_date = datetime.fromisoformat(day)
+        day_name = DAY_NAMES_PT[label_date.weekday() if label_date.weekday() < 6 else 6]
+        # sunday fix: Python weekday() returns 6 for sunday
+        weekday_map = {0:"Seg",1:"Ter",2:"Qua",3:"Qui",4:"Sex",5:"Sáb",6:"Dom"}
+        day_name = weekday_map[label_date.weekday()]
+        short_label = f"{day_name} {label_date.strftime('%d/%m')}"
+        is_today = day == date.today().isoformat()
+        color = WEEK_COLORS[idx % len(WEEK_COLORS)]
+        weekly_datasets.append({
+            "label": short_label + (" ·hoje" if is_today else ""),
+            "data": [round(weekly_hours[day].get(h, 0) / 60, 1) for h in all_hours],
+            "borderColor": color,
+            "backgroundColor": color + "22",
+            "borderWidth": 3 if is_today else 1.5,
+            "pointRadius": 3 if is_today else 2,
+            "tension": 0.4,
+            "fill": False,
+        })
 
     html = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -321,6 +352,12 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets):
     </div>
   </div>
 
+  <!-- Linha 3: Comparação semanal -->
+  <div class="panel">
+    <div class="panel-title">Comparação semanal · tela por hora do dia (últimos 7 dias)</div>
+    <div class="chart-wrap-tall"><canvas id="weeklyChart"></canvas></div>
+  </div>
+
 </main>
 
 <footer>tracker.db · {sum(1 for r in [1])} sessão · dados ao vivo</footer>
@@ -384,6 +421,31 @@ new Chart(document.getElementById('hourChart'), {{
   }}
 }});
 
+// ── Comparação semanal ──
+new Chart(document.getElementById('weeklyChart'), {{
+  type: 'line',
+  data: {{
+    labels: hours,
+    datasets: {json.dumps(weekly_datasets)}
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    interaction: {{ mode: 'index', intersect: false }},
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 12, padding: 16, font: {{ size: 11 }} }} }},
+      tooltip: {{
+        callbacks: {{
+          label: ctx => ` ${{ctx.dataset.label}}: ${{ctx.parsed.y}}min`
+        }}
+      }}
+    }},
+    scales: {{
+      x: {{ grid: {{ display: false }}, ticks: {{ maxTicksLimit: 12 }} }},
+      y: {{ ticks: {{ callback: v => v + 'min' }}, grid: {{ color: '#1f2535' }} }}
+    }}
+  }}
+}});
+
 // ── Top conteúdos ──
 const labels = {top_labels};
 const values = {top_values};
@@ -411,8 +473,8 @@ labels.forEach((label, i) => {{
 
 def main():
     rows = fetch_all_data()
-    screen_by_date, audio_by_date, audio_details, hour_buckets = process_data(rows)
-    html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets)
+    screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours = process_data(rows)
+    html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours)
 
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
     with open(out, "w", encoding="utf-8") as f:
