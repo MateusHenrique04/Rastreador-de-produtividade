@@ -16,7 +16,6 @@ outro.py
 
 # PyInstaller output
 build/
-dist/
 dashboard.spec
 
 dashboard.html
