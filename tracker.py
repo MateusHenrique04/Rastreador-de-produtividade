@@ -4,9 +4,9 @@ from datetime import datetime
 from classifier import split_app_context, is_audio_app, is_actually_playing_audio
 
 DB_NAME = "tracker.db"
-AUDIO_BACKGROUND_TIMEOUT = 6   # segundos sem foco antes de parar de contar áudio
+AUDIO_BACKGROUND_TIMEOUT = 60   # segundos sem foco antes de parar de contar áudio
 POLL_INTERVAL = 5               # intervalo de polling em segundos
-AFK_THRESHOLD = 60              # segundos sem input para considerar AFK
+AFK_THRESHOLD = 5 * 60          # segundos sem input para considerar AFK
 AFK_AUDIO_CUTOFF = 15 * 60      # 15 min AFK → para de contar tela e áudio
 
 AUDIO_PROCESS_KEYWORDS = ["chrome", "brave", "audiobookplayer", "firefox", "spotify"]
