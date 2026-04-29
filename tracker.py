@@ -1,8 +1,6 @@
 from __future__ import annotations
-import time, sqlite3, logging
+import time, sqlite3, logging, sys
 from datetime import datetime
-import win32gui
-import ctypes
 from classifier import split_app_context, is_audio_app, is_actually_playing_audio
 
 DB_NAME = "tracker.db"
@@ -13,9 +11,44 @@ AFK_AUDIO_CUTOFF = 15 * 60      # 15 min AFK → para de contar tela e áudio
 
 AUDIO_PROCESS_KEYWORDS = ["chrome", "brave", "audiobookplayer", "firefox", "spotify"]
 
-logging.basicConfig(filename="tracker.log", level=logging.ERROR,
-    format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    filename="tracker.log",
+    level=logging.DEBUG,          # ← era ERROR, agora DEBUG para capturar tudo
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+# Também imprime erros no terminal para diagnóstico imediato
+console = logging.StreamHandler(sys.stdout)
+console.setLevel(logging.WARNING)
+logging.getLogger().addHandler(console)
+
 logger = logging.getLogger(__name__)
+
+
+# ── Verificação de dependências ────────────────────────────────────────────────
+
+def _check_dependencies():
+    """Verifica se as dependências do Windows estão instaladas antes de rodar."""
+    missing = []
+    try:
+        import win32gui  # noqa: F401
+    except ImportError:
+        missing.append("pywin32  →  pip install pywin32")
+
+    try:
+        import ctypes
+        ctypes.windll.user32  # noqa: F401
+    except Exception:
+        missing.append("ctypes/windll (verifique se está no Windows)")
+
+    if missing:
+        print("❌ Dependências faltando:")
+        for m in missing:
+            print(f"   • {m}")
+        print("\nRode:  pip install pywin32 pycaw psutil")
+        print("Depois: python Scripts/pywin32_postinstall.py -install")
+        sys.exit(1)
+
+    print("✅ Dependências OK")
 
 
 # ── Banco de dados ─────────────────────────────────────────────────────────────
@@ -28,7 +61,6 @@ def init_db(conn):
         context TEXT NOT NULL,
         timestamp DATETIME NOT NULL)""")
 
-    # Tabela de sessões AFK — criada automaticamente se não existir
     conn.execute("""CREATE TABLE IF NOT EXISTS afk_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at DATETIME NOT NULL,
@@ -38,6 +70,7 @@ def init_db(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_afk_started ON afk_sessions(started_at)")
     conn.commit()
+    logger.debug("Banco de dados inicializado: %s", DB_NAME)
 
 
 def save_log(conn, log_type, app, context, timestamp):
@@ -46,6 +79,7 @@ def save_log(conn, log_type, app, context, timestamp):
         (log_type, app, context, timestamp.isoformat()),
     )
     conn.commit()
+    logger.debug("LOG [%s] app=%s | ctx=%s | ts=%s", log_type, app, context[:60], timestamp)
 
 
 def save_afk_session(conn, started_at: datetime, ended_at: datetime):
@@ -55,9 +89,12 @@ def save_afk_session(conn, started_at: datetime, ended_at: datetime):
         (started_at.isoformat(), ended_at.isoformat(), duration),
     )
     conn.commit()
+    logger.debug("AFK salvo: %s → %s (%.0fs)", started_at, ended_at, duration)
 
 
 # ── Detecção de AFK ────────────────────────────────────────────────────────────
+
+import ctypes
 
 class _LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
@@ -65,27 +102,39 @@ class _LASTINPUTINFO(ctypes.Structure):
 
 def get_idle_seconds() -> float:
     """Retorna quantos segundos o usuário está sem mover mouse ou teclar."""
-    lii = _LASTINPUTINFO()
-    lii.cbSize = ctypes.sizeof(_LASTINPUTINFO)
-    ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii))
-    millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
-    return max(millis / 1000.0, 0.0)
+    try:
+        lii = _LASTINPUTINFO()
+        lii.cbSize = ctypes.sizeof(_LASTINPUTINFO)
+        ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii))
+        millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+        return max(millis / 1000.0, 0.0)
+    except Exception as e:
+        logger.warning("get_idle_seconds falhou: %s — assumindo idle=0", e)
+        return 0.0
 
 
 # ── Janela ativa ───────────────────────────────────────────────────────────────
 
-def get_active_window():
+def get_active_window() -> str:
     try:
-        return win32gui.GetWindowText(win32gui.GetForegroundWindow()) or "Desconhecido"
+        import win32gui
+        title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
+        return title if title.strip() else "Desconhecido"
     except Exception as e:
-        logger.error("Erro janela ativa: %s", e)
+        logger.error("Erro ao obter janela ativa: %s", e)
         return "Desconhecido"
 
 
 # ── Loop principal ─────────────────────────────────────────────────────────────
 
 def track():
+    _check_dependencies()
+
     print("🔍 Rastreamento iniciado... (CTRL+C para parar)")
+    print(f"   Banco: {DB_NAME}")
+    print(f"   Polling: {POLL_INTERVAL}s | AFK após: {AFK_THRESHOLD}s")
+    print(f"   Janela atual: {get_active_window()}\n")
+
     with sqlite3.connect(DB_NAME) as conn:
         init_db(conn)
 
@@ -95,23 +144,29 @@ def track():
         afk_start: datetime | None = None
         is_afk = False
 
+        # Contador de logs para feedback visual
+        log_count = 0
+
         while True:
             try:
                 now = datetime.now()
                 idle = get_idle_seconds()
 
+                title = get_active_window()
+                app, context = split_app_context(title)
+
+                logger.debug("Poll: idle=%.1fs | app=%s | title=%s", idle, app, title[:60])
+
                 # ── Suprime AFK enquanto Valorant está em foco ─────────────────
                 # O Vanguard pode bloquear GetLastInputInfo e gerar falso AFK
-                _title_check = get_active_window()
-                _app_check, _ = split_app_context(_title_check)
-                if _app_check == "Valorant":
+                if app == "Valorant":
                     idle = 0.0
 
                 # ── Transição ATIVO → AFK ──────────────────────────────────────
                 if not is_afk and idle >= AFK_THRESHOLD:
                     is_afk = True
                     afk_start = now
-                    print(f"💤 AFK detectado às {now.strftime('%H:%M:%S')}")
+                    print(f"💤 AFK detectado às {now.strftime('%H:%M:%S')} (idle={idle:.0f}s)")
 
                 # ── Transição AFK → ATIVO ──────────────────────────────────────
                 elif is_afk and idle < AFK_THRESHOLD:
@@ -119,16 +174,13 @@ def track():
                     if afk_start:
                         save_afk_session(conn, afk_start, now)
                         duration = (now - afk_start).total_seconds()
-                        m = int(duration // 60)
-                        s = int(duration % 60)
-                        print(f"✅ Voltou às {now.strftime('%H:%M:%S')} — ficou AFK por {m}min {s}s")
+                        m, s = int(duration // 60), int(duration % 60)
+                        print(f"✅ Voltou às {now.strftime('%H:%M:%S')} — AFK por {m}min {s}s")
                     afk_start = None
-                    # Reseta estado de áudio para não inflar contagem com tempo AFK
                     last_audio_app = last_audio_ctx = last_audio_seen = None
 
                 # ── Se AFK: não registra logs de tela/áudio ────────────────────
                 if is_afk:
-                    # Após AFK_AUDIO_CUTOFF, garante reset do estado de áudio
                     if afk_start:
                         afk_duration = (now - afk_start).total_seconds()
                         if afk_duration >= AFK_AUDIO_CUTOFF:
@@ -137,10 +189,12 @@ def track():
                     continue
 
                 # ── Rastreamento normal (usuário ativo) ────────────────────────
-                # Reutiliza title/app já capturados acima (antes do bloco AFK)
-                title = _title_check
-                app, context = split_app_context(title)
                 save_log(conn, "screen", app, context, now)
+                log_count += 1
+
+                # Feedback visual a cada 12 logs (~1 min)
+                if log_count % 12 == 0:
+                    print(f"[{now.strftime('%H:%M:%S')}] ✍️  {log_count} logs gravados | app atual: {app}")
 
                 audio_in_focus = is_audio_app(app)
                 real_audio = is_actually_playing_audio(AUDIO_PROCESS_KEYWORDS)
@@ -163,13 +217,13 @@ def track():
                 time.sleep(POLL_INTERVAL)
 
             except KeyboardInterrupt:
-                # Garante que sessão AFK em curso é salva ao encerrar
                 if is_afk and afk_start:
                     save_afk_session(conn, afk_start, datetime.now())
-                print("\n⏹️  Rastreamento encerrado.")
+                print(f"\n⏹️  Rastreamento encerrado. Total de logs gravados: {log_count}")
                 break
             except Exception as e:
-                logger.error("Erro no loop: %s", e)
+                logger.error("Erro no loop principal: %s", e, exc_info=True)
+                print(f"⚠️  Erro: {e} — continuando em {POLL_INTERVAL}s...")
                 time.sleep(POLL_INTERVAL)
 
 

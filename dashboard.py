@@ -28,6 +28,18 @@ def fetch_all_data():
     conn.close()
     return rows
 
+def fetch_afk_data():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='afk_sessions'")
+    if not c.fetchone():
+        conn.close()
+        return {}
+    c.execute("SELECT date(started_at), SUM(duration_seconds) FROM afk_sessions WHERE duration_seconds IS NOT NULL GROUP BY date(started_at)")
+    rows = c.fetchall()
+    conn.close()
+    return {row[0]: row[1] for row in rows}
+
 def process_data(rows):
     screen_by_date  = defaultdict(lambda: defaultdict(float))
     audio_by_date   = defaultdict(lambda: defaultdict(float))
@@ -57,15 +69,21 @@ def process_data(rows):
         if log_type == "screen":
             screen_by_date[day][app] += diff
             if day == today:
-                hour_buckets[hour][app]  += diff
+                hour_buckets[hour][app] += diff
             if day >= week_start:
                 weekly_hours[day][hour] += diff
-        elif log_type == "audio":
+        if log_type == "audio":
+            # Conta o app de áudio nos gráficos de tela/hora também (ex: YouTube em background)
+            screen_by_date[day][app] += diff
+            if day == today:
+                hour_buckets[hour][app] += diff
+            if day >= week_start:
+                weekly_hours[day][hour] += diff
             ctx_clean = context.split(" - ")[0][:80]
-            audio_details[ctx_clean]  += diff
+            audio_details[ctx_clean] += diff
             # try classify
             cat = classify(app, context)
-            audio_by_date[day][cat]   += diff
+            audio_by_date[day][cat] += diff
 
     return screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours
 
@@ -83,7 +101,7 @@ def fmt(seconds):
     m = int((seconds % 3600) // 60)
     return f"{h}h {m}min"
 
-def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours):
+def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours, afk_by_date):
     all_days = sorted(set(list(screen_by_date.keys()) + list(audio_by_date.keys())))
 
     # Build JS-ready data
@@ -139,6 +157,20 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
         key=lambda x: x[1], default=("—", 0)
     )
     top_content  = top_audio[0][0][:30] + "…" if top_audio else "—"
+
+    # AFK por dia
+    today_str = date.today().isoformat()
+    afk_today_secs = afk_by_date.get(today_str, 0)
+    afk_today_str = fmt(afk_today_secs) if afk_today_secs else "nenhum"
+    afk_history = []
+    for day in sorted(afk_by_date.keys(), reverse=True):
+        secs = afk_by_date[day]
+        if secs:
+            dt = datetime.fromisoformat(day)
+            WEEKDAY_PT = {0:"Seg",1:"Ter",2:"Qua",3:"Qui",4:"Sex",5:"Sáb",6:"Dom"}
+            label = f"{WEEKDAY_PT[dt.weekday()]} {dt.strftime('%d/%m')}"
+            afk_history.append({"day": label, "time": fmt(secs), "mins": round(secs/60,1)})
+    afk_history_js = json.dumps(afk_history)
 
     # Weekly comparison: Seg → Dom da semana atual (atualiza automaticamente a cada semana)
     _today = date.today()
@@ -288,6 +320,39 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
   .top-name {{ font-size: .85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
   .top-time {{ font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--muted); white-space: nowrap; }}
 
+  /* ── AFK ── */
+  .afk-today {{
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }}
+  .afk-today-label {{ font-size: .85rem; color: var(--muted); }}
+  .afk-today-value {{
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }}
+  .afk-history {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }}
+  .afk-chip {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 90px;
+  }}
+  .afk-chip-day {{ font-size: .72rem; color: var(--muted); letter-spacing: .05em; }}
+  .afk-chip-time {{ font-size: .9rem; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; }}
+
   /* ── Rodapé ── */
   footer {{
     text-align: center;
@@ -359,6 +424,17 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
   <div class="panel">
     <div class="panel-title">Comparação semanal · tela por hora do dia (últimos 7 dias)</div>
     <div class="chart-wrap-tall"><canvas id="weeklyChart"></canvas></div>
+  </div>
+
+  <!-- AFK -->
+  <div class="panel">
+    <div class="panel-title">Tempo AFK</div>
+    <div class="afk-today">
+      <span class="afk-today-label">Hoje você ficou</span>
+      <span class="afk-today-value">{afk_today_str}</span>
+      <span class="afk-today-label">ausente do teclado/mouse</span>
+    </div>
+    <div class="afk-history" id="afkHistory"></div>
   </div>
 
 </main>
@@ -449,6 +525,21 @@ new Chart(document.getElementById('weeklyChart'), {{
   }}
 }});
 
+// ── AFK histórico ──
+const afkData = {afk_history_js};
+const afkContainer = document.getElementById('afkHistory');
+if (afkData.length === 0) {{
+  afkContainer.innerHTML = '<span style="color:var(--muted);font-size:.85rem">Nenhum histórico de dias anteriores.</span>';
+}} else {{
+  afkData.forEach(d => {{
+    afkContainer.innerHTML += `
+      <div class="afk-chip">
+        <span class="afk-chip-day">${{d.day}}</span>
+        <span class="afk-chip-time">${{d.time}}</span>
+      </div>`;
+  }});
+}}
+
 // ── Top conteúdos ──
 const labels = {top_labels};
 const values = {top_values};
@@ -476,8 +567,9 @@ labels.forEach((label, i) => {{
 
 def main():
     rows = fetch_all_data()
+    afk_by_date = fetch_afk_data()
     screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours = process_data(rows)
-    html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours)
+    html = generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours, afk_by_date)
 
     if getattr(sys, "frozen", False):
         base_dir = os.path.dirname(sys.executable)

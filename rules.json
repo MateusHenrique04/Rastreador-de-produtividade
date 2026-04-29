@@ -44,7 +44,7 @@
 
   "content_rules": [
     {
-      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck", "eleições", "três elementos", "Audiobook PRO", "opressor", "oprimido", "preconceito", "discriminação", "injustiça", "desigualdade", "Professor" ],
+      "match": ["curso", "aula", "python", "PODCAST 3", "Ciência", "Linck", "eleições", "três elementos", "Audiobook PRO", "opressor", "oprimido", "preconceito", "discriminação", "injustiça", "desigualdade", "Professor","psicologia"],
       "category": "Estudo"
     },
     {
@@ -52,7 +52,7 @@
       "category": "Aprendizado leve"
     },
     {
-      "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO", "TALKZAM", "Pokémon", "Minecraft", "GTA", "FIFA", "Fortnite", "Call of Duty", "Valorant", "League of Legends", "CASTRINHO", "stardew valley", "FUNKEIRO", "Flow"],
+      "match": ["episode", "react", "vlog", "NBA ", "FAZENDO AMIZADE", "EXCLUSIVO", "TALKZAM", "Pokémon", "Minecraft", "GTA", "FIFA", "Fortnite", "Call of Duty", "Valorant", "League of Legends", "CASTRINHO", "stardew valley", "FUNKEIRO", "Flow", "ACF"],
       "category": "Entretenimento"
     }
   ],
