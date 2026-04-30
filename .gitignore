@@ -9,6 +9,7 @@ venv/
 # Database file
 tracker.db
 tracker.log
+tracker.db-journal
 
 # Ignore local scripts
 alterar.py
