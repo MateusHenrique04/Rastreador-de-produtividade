@@ -45,45 +45,79 @@ def process_data(rows):
     audio_by_date   = defaultdict(lambda: defaultdict(float))
     audio_details   = defaultdict(float)
     hour_buckets    = defaultdict(lambda: defaultdict(float))
-    # weekly: {day_iso: {hour_str: total_screen_seconds}}
     weekly_hours    = defaultdict(lambda: defaultdict(float))
 
     today = date.today().isoformat()
-    # Semana atual: sempre de segunda-feira até domingo
     _today = date.today()
-    week_monday = _today - timedelta(days=_today.weekday())  # weekday(): 0=Seg, 6=Dom
+    week_monday = _today - timedelta(days=_today.weekday())
     week_start = week_monday.isoformat()
 
-    for i in range(len(rows) - 1):
-        log_type, app, context, t1 = rows[i]
-        _, _, _, t2 = rows[i + 1]
-        t1 = datetime.fromisoformat(t1)
-        t2 = datetime.fromisoformat(t2)
-        diff = (t2 - t1).total_seconds()
-        if not (MIN_GAP <= diff <= MAX_GAP):
-            continue
+    # ✅ CORREÇÃO: separa screen e audio antes de calcular gaps.
+    # O tracker grava screen e audio com o MESMO timestamp — se iterar
+    # tudo junto, pares com diff=0 são descartados pelo MIN_GAP e apps
+    # como Valorant somem completamente do dashboard.
+    screen_rows = [(app, context, ts) for lt, app, context, ts in rows if lt == "screen"]
+    audio_rows  = [(app, context, ts) for lt, app, context, ts in rows if lt == "audio"]
 
-        day = t1.date().isoformat()
-        hour = t1.strftime("%H:00")
+    # Conjunto de (app, timestamp) já contabilizados via logs "audio"
+    # para evitar dupla contagem quando screen e audio existem juntos.
+    audio_ts_seen: set[tuple] = set()
 
-        if log_type == "screen":
-            screen_by_date[day][app] += diff
-            if day == today:
-                hour_buckets[hour][app] += diff
-            if day >= week_start:
-                weekly_hours[day][hour] += diff
-        if log_type == "audio":
-            # Conta o app de áudio nos gráficos de tela/hora também (ex: YouTube em background)
-            screen_by_date[day][app] += diff
-            if day == today:
-                hour_buckets[hour][app] += diff
-            if day >= week_start:
-                weekly_hours[day][hour] += diff
-            ctx_clean = context.split(" - ")[0][:80]
-            audio_details[ctx_clean] += diff
-            # try classify
-            cat = classify(app, context)
-            audio_by_date[day][cat] += diff
+    def _accumulate(log_rows, is_audio):
+        for i in range(len(log_rows) - 1):
+            app, context, t1 = log_rows[i]
+            _,   _,       t2 = log_rows[i + 1]
+            t1 = datetime.fromisoformat(t1)
+            t2 = datetime.fromisoformat(t2)
+            diff = (t2 - t1).total_seconds()
+
+            day  = t1.date().isoformat()
+            day2 = t2.date().isoformat()
+
+            if day != day2:
+                continue
+            if not (MIN_GAP <= diff <= MAX_GAP):
+                continue
+
+            hour = t1.strftime("%H:00")
+
+            if not is_audio:
+                screen_by_date[day][app] += diff
+                if day == today:
+                    hour_buckets[hour][app] += diff
+                if day >= week_start:
+                    weekly_hours[day][hour] += diff
+                # ✅ FIX: YouTube (e outros apps de conteúdo) rastreados como
+                # "screen" também alimentam o Top Conteúdos, caso não haja
+                # logs de "audio" correspondentes (pycaw pode falhar em
+                # detectar o áudio do browser).
+                CONTENT_APPS = {"YouTube", "Estudo (Audiobook)"}
+                if app in CONTENT_APPS and (app, t1.isoformat()) not in audio_ts_seen:
+                    # Remove sufixo " - YouTube" / " - YouTube Music" do título
+                    parts = context.split(" - ")
+                    ctx_clean = " - ".join(p for p in parts if p.strip().lower() not in
+                                           {"youtube", "youtube music", "youtube premium"})
+                    ctx_clean = ctx_clean.strip(" -")[:80] or context[:80]
+                    audio_details[ctx_clean] += diff
+                    cat = classify(app, context)
+                    audio_by_date[day][cat] += diff
+            else:
+                if day == today:
+                    hour_buckets[hour][app] += diff
+                if day >= week_start:
+                    weekly_hours[day][hour] += diff
+                # Remove sufixo " - YouTube" / " - YouTube Music" do título
+                parts = context.split(" - ")
+                ctx_clean = " - ".join(p for p in parts if p.strip().lower() not in
+                                       {"youtube", "youtube music", "youtube premium"})
+                ctx_clean = ctx_clean.strip(" -")[:80] or context[:80]
+                audio_details[ctx_clean] += diff
+                cat = classify(app, context)
+                audio_by_date[day][cat] += diff
+                audio_ts_seen.add((app, t1.isoformat()))
+
+    _accumulate(audio_rows,  is_audio=True)
+    _accumulate(screen_rows, is_audio=False)
 
     return screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours
 
@@ -104,13 +138,13 @@ def fmt(seconds):
 def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, weekly_hours, afk_by_date):
     all_days = sorted(set(list(screen_by_date.keys()) + list(audio_by_date.keys())))
 
-    # Build JS-ready data
     days_js         = json.dumps(all_days)
     screen_apps     = sorted({app for d in screen_by_date.values() for app in d})
     audio_cats      = sorted({cat for d in audio_by_date.values()  for cat in d})
 
     screen_datasets = []
-    APP_COLORS = ["#a78bfa","#60a5fa","#4ade80","#fb923c","#f87171","#fbbf24","#94a3b8"]
+    APP_COLORS = ["#a78bfa","#60a5fa","#4ade80","#fb923c","#f87171","#fbbf24","#94a3b8",
+                  "#34d399","#38bdf8","#c084fc","#f472b6","#facc15","#e879f9","#2dd4bf"]
     for idx, app in enumerate(screen_apps):
         screen_datasets.append({
             "label": app,
@@ -137,7 +171,6 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
         "#34d399","#38bdf8","#c084fc","#f472b6","#facc15","#94a3b8"
     ][:len(top_audio)])
 
-    # Hour timeline (today)
     all_hours = [f"{str(h).zfill(2)}:00" for h in range(0, 24)]
     hour_apps = sorted({app for h in hour_buckets.values() for app in h})
     hour_datasets = []
@@ -149,7 +182,6 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
             "borderRadius": 4,
         })
 
-    # Summary cards
     total_screen = sum(v for d in screen_by_date.values() for v in d.values())
     total_audio  = sum(audio_details.values())
     top_app      = max(
@@ -158,7 +190,6 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
     )
     top_content  = top_audio[0][0][:30] + "…" if top_audio else "—"
 
-    # AFK por dia
     today_str = date.today().isoformat()
     afk_today_secs = afk_by_date.get(today_str, 0)
     afk_today_str = fmt(afk_today_secs) if afk_today_secs else "nenhum"
@@ -172,10 +203,9 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
             afk_history.append({"day": label, "time": fmt(secs), "mins": round(secs/60,1)})
     afk_history_js = json.dumps(afk_history)
 
-    # Weekly comparison: Seg → Dom da semana atual (atualiza automaticamente a cada semana)
     _today = date.today()
-    _monday = _today - timedelta(days=_today.weekday())  # weekday() 0=Seg, 6=Dom
-    week_days = [(_monday + timedelta(days=i)).isoformat() for i in range(7)]  # Seg..Dom
+    _monday = _today - timedelta(days=_today.weekday())
+    week_days = [(_monday + timedelta(days=i)).isoformat() for i in range(7)]
     WEEK_COLORS = ["#a78bfa","#60a5fa","#4ade80","#fb923c","#f87171","#fbbf24","#94a3b8"]
     WEEKDAY_NAMES = {0:"Seg",1:"Ter",2:"Qua",3:"Qui",4:"Sex",5:"Sáb",6:"Dom"}
 
@@ -422,7 +452,7 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
 
   <!-- Linha 3: Comparação semanal -->
   <div class="panel">
-    <div class="panel-title">Comparação semanal · tela por hora do dia (últimos 7 dias)</div>
+    <div class="panel-title">Comparação semanal · tela por hora do dia (semana atual)</div>
     <div class="chart-wrap-tall"><canvas id="weeklyChart"></canvas></div>
   </div>
 
@@ -439,7 +469,7 @@ def generate_html(screen_by_date, audio_by_date, audio_details, hour_buckets, we
 
 </main>
 
-<footer>tracker.db · {sum(1 for r in [1])} sessão · dados ao vivo</footer>
+<footer>tracker.db · dados ao vivo</footer>
 
 <script>
 Chart.defaults.color = '#64748b';

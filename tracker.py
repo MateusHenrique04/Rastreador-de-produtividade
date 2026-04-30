@@ -6,7 +6,7 @@ from classifier import split_app_context, is_audio_app, is_actually_playing_audi
 DB_NAME = "tracker.db"
 AUDIO_BACKGROUND_TIMEOUT = 60   # segundos sem foco antes de parar de contar áudio
 POLL_INTERVAL = 5               # intervalo de polling em segundos
-AFK_THRESHOLD = 5 * 60          # segundos sem input para considerar AFK
+AFK_THRESHOLD = 15 * 60          # segundos sem input para considerar AFK
 AFK_AUDIO_CUTOFF = 15 * 60      # 15 min AFK → para de contar tela e áudio
 
 AUDIO_PROCESS_KEYWORDS = ["chrome", "brave", "audiobookplayer", "firefox", "spotify"]
@@ -193,7 +193,7 @@ def track():
                 log_count += 1
 
                 # Feedback visual a cada 12 logs (~1 min)
-                if log_count % 12 == 0:
+                if log_count % 2 == 0:
                     print(f"[{now.strftime('%H:%M:%S')}] ✍️  {log_count} logs gravados | app atual: {app}")
 
                 audio_in_focus = is_audio_app(app)

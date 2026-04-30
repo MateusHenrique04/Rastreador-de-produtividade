@@ -2,7 +2,7 @@
   "app_rules": [
     { "match": ["audiobook pro"], "app": "Estudo (Audiobook)" },
     { "match": ["youtube"], "app": "YouTube" },
-    { "match": ["visual studio", "code"], "app": "VS Code" },
+    { "match": ["visual studio code", "vscode"], "app": "VS Code" },
     { "match": ["gmail"], "app": "Email" },
     { "match": ["brave", "chrome"], "app": "Navegador" },
     { "match": ["spotify"], "app": "Spotify" },
@@ -24,7 +24,7 @@
         "história", "geografia", "filosofia", "sociologia",
         "psicologia", "ciência", "tecnologia",
         "livro", "leitura", "audiobook",
-        "redação", "enem", "prova", "exercício"
+        "redação", "enem", "prova", "exercício", "Sarjeta"
       ],
       "category": "Estudo"
     },
