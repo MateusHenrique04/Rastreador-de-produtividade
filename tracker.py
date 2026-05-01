@@ -1,7 +1,7 @@
 from __future__ import annotations
 import time, sqlite3, logging, sys
 from datetime import datetime
-from classifier import split_app_context, is_audio_app, is_actually_playing_audio
+from classifier import split_app_context, is_audio_app, get_active_audio_process
 
 DB_NAME = "tracker.db"
 AUDIO_BACKGROUND_TIMEOUT = 60   # segundos sem foco antes de parar de contar áudio
@@ -223,14 +223,20 @@ def track():
                     print(f"[{now.strftime('%H:%M:%S')}] ✍️  {log_count} logs gravados | app atual: {app}")
 
                 audio_in_focus = is_audio_app(app)
-                real_audio = is_actually_playing_audio(AUDIO_PROCESS_KEYWORDS)
+                active_audio_proc = get_active_audio_process(AUDIO_PROCESS_KEYWORDS)
 
-                if audio_in_focus or real_audio:
-                    last_audio_app = app if audio_in_focus else last_audio_app
-                    last_audio_ctx = context if audio_in_focus else last_audio_ctx
+                if audio_in_focus:
+                    last_audio_app = app
+                    last_audio_ctx = context
                     last_audio_seen = now
-                    if last_audio_app and last_audio_ctx:
-                        save_log(conn, "audio", last_audio_app, last_audio_ctx, now)
+                    save_log(conn, "audio", last_audio_app, last_audio_ctx, now)
+
+                elif active_audio_proc:
+                    if not last_audio_app or active_audio_proc.lower() not in last_audio_app.lower():
+                        last_audio_app = active_audio_proc
+                        last_audio_ctx = "Tocando em segundo plano"
+                    last_audio_seen = now
+                    save_log(conn, "audio", last_audio_app, last_audio_ctx, now)
 
                 elif last_audio_app and last_audio_seen:
                     elapsed = (now - last_audio_seen).total_seconds()

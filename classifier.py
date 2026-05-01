@@ -109,12 +109,13 @@ def classify_context(app: str, context: str) -> str:
 # 🔊 AUDIO CHECK
 # =========================
 def is_audio_app(app: str) -> bool:
-    return app in ["YouTube", "Estudo (Audiobook)", "Lector"]
+    return app in ["YouTube", "Estudo (Audiobook)", "Lector", "Spotify"]
 
 
-def is_actually_playing_audio(process_keywords: list[str]) -> bool:
+def get_active_audio_process(process_keywords: list[str]) -> str | None:
     """
     Verifica se o app está realmente tocando áudio (via pycaw).
+    Retorna o nome amigável do processo (ex: 'Spotify') se estiver tocando, senão None.
     Fallback usa psutil se necessário.
     """
     try:
@@ -128,10 +129,12 @@ def is_actually_playing_audio(process_keywords: list[str]) -> bool:
             name = session.Process.name().lower()
             state = session.State  # 0=inactive, 1=active
 
-            if state == 1 and any(kw.lower() in name for kw in process_keywords):
-                return True
+            if state == 1:
+                for kw in process_keywords:
+                    if kw.lower() in name:
+                        return kw.capitalize()
 
-        return False
+        return None
 
     except Exception:
         # fallback
@@ -139,9 +142,10 @@ def is_actually_playing_audio(process_keywords: list[str]) -> bool:
             import psutil
             for proc in psutil.process_iter(["name"]):
                 name = proc.info["name"].lower()
-                if any(kw.lower() in name for kw in process_keywords):
-                    return True
+                for kw in process_keywords:
+                    if kw.lower() in name:
+                        return kw.capitalize()
         except Exception:
             pass
 
-        return False
+        return None
