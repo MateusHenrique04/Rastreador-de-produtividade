@@ -83,8 +83,8 @@ def classify_context(app: str, context: str) -> str:
     # 🎧 Regras especiais
     # =========================
 
-    # Audiobook sempre puxa forte pra estudo
-    if app == "Estudo (Audiobook)":
+    # Audiobook e Lector sempre puxam forte pra estudo
+    if app in ["Estudo (Audiobook)", "Lector"]:
         scores["Estudo"] += 5
 
     # VS Code é produtividade direta
@@ -109,7 +109,7 @@ def classify_context(app: str, context: str) -> str:
 # 🔊 AUDIO CHECK
 # =========================
 def is_audio_app(app: str) -> bool:
-    return app in ["YouTube", "Estudo (Audiobook)"]
+    return app in ["YouTube", "Estudo (Audiobook)", "Lector"]
 
 
 def is_actually_playing_audio(process_keywords: list[str]) -> bool:

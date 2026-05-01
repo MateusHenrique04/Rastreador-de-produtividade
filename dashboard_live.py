@@ -206,10 +206,14 @@ def build_payload():
         for cat in audio_cats
     ]
 
-    top_audio = sorted(audio_details.items(), key=lambda x: x[1], reverse=True)[:12]
+    top_audio = sorted(
+        [(t, s) for t, s in audio_details.items() if s >= 300],  # >= 5 minutos
+        key=lambda x: x[1],
+        reverse=True,
+    )
     top_labels = [t[0][:45] + ("..." if len(t[0]) > 45 else "") for t in top_audio]
     top_values = [round(t[1] / 60, 1) for t in top_audio]
-    top_colors = TOP_COLORS[:len(top_audio)]
+    top_colors = [TOP_COLORS[i % len(TOP_COLORS)] for i in range(len(top_audio))]
 
     all_hours = [f"{str(h).zfill(2)}:00" for h in range(24)]
     hour_apps = sorted({app for h in hour_buckets.values() for app in h})
@@ -273,7 +277,7 @@ def build_payload():
             "totalScreen": fmt(total_screen),
             "daysCount": len(all_days),
             "totalAudio": fmt(total_audio),
-            "audioCount": len(top_audio),
+            "audioCount": len(top_audio),  # total de conteúdos com >= 5 min
             "topApp": top_app[0],
             "topAppTime": fmt(top_app[1]),
             "topContent": top_content,

@@ -6,7 +6,7 @@ from classifier import split_app_context, is_audio_app, is_actually_playing_audi
 DB_NAME = "tracker.db"
 AUDIO_BACKGROUND_TIMEOUT = 60   # segundos sem foco antes de parar de contar áudio
 POLL_INTERVAL = 5               # intervalo de polling em segundos
-AFK_THRESHOLD = 15 * 60          # segundos sem input para considerar AFK
+AFK_THRESHOLD = 5 * 60          # segundos sem input para considerar AFK
 AFK_AUDIO_CUTOFF = 15 * 60      # 15 min AFK → para de contar tela e áudio
 
 AUDIO_PROCESS_KEYWORDS = ["chrome", "brave", "audiobookplayer", "firefox", "spotify"]
@@ -54,6 +54,7 @@ def _check_dependencies():
 # ── Banco de dados ─────────────────────────────────────────────────────────────
 
 def init_db(conn):
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("""CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL,
@@ -135,7 +136,7 @@ def track():
     print(f"   Polling: {POLL_INTERVAL}s | AFK após: {AFK_THRESHOLD}s")
     print(f"   Janela atual: {get_active_window()}\n")
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_NAME, timeout=30.0) as conn:
         init_db(conn)
 
         last_audio_app = last_audio_ctx = last_audio_seen = None
@@ -157,9 +158,34 @@ def track():
 
                 logger.debug("Poll: idle=%.1fs | app=%s | title=%s", idle, app, title[:60])
 
-                # ── Suprime AFK enquanto Valorant está em foco ─────────────────
-                # O Vanguard pode bloquear GetLastInputInfo e gerar falso AFK
-                if app == "Valorant":
+                # ── Suprime AFK enquanto jogos estão em foco ──────────────────────
+                # Jogos fullscreen (especialmente com anti-cheat como Vanguard)
+                # podem bloquear GetLastInputInfo, gerando falso AFK
+                FULLSCREEN_GAMES = {
+                    "Valorant",
+                    "League of Legends",
+                    "Counter-Strike 2",
+                    "Counter-Strike: Source",
+                    "Risk of Rain 2",
+                    "Risk of Rain",
+                    "Slay the Spire",
+                    "Bloons TD 6",
+                    "Bloons TD 5",
+                    "Hollow Knight: Silksong",
+                    "Hollow Knight",
+                    "Megabonk",
+                    "Nova Lands",
+                    "Rayman Legends",
+                    "Rayman Origins",
+                    "Stardew Valley",
+                    "Terraria",
+                    "The Gnorp Apologue",
+                    "KOF '97 Global Match",
+                    "tModLoader",
+                    "Tribes of Midgard",
+                    "Vampire Survivors",
+                }
+                if app in FULLSCREEN_GAMES:
                     idle = 0.0
 
                 # ── Transição ATIVO → AFK ──────────────────────────────────────

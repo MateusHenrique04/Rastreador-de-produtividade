@@ -24,3 +24,6 @@ dashboard.html
 # VS Code workspace settings
 .vscode/
 .DS_Store
+
+tracker.db-shm
+tracker.db-wal
