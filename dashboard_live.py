@@ -42,6 +42,18 @@ CATEGORY_COLORS = {
     "Outros": "#94a3b8",
 }
 
+# Apps que devem ser exibidos com nome de categoria em vez do nome do app
+SCREEN_APP_CATEGORY = {
+    "Zettlr":               "Escrever",
+    "Estudo (Audiobook)":   "Leitura",
+    "Lector":               "Leitura",
+}
+
+SCREEN_CATEGORY_COLORS = {
+    "Escrever": "#f472b6",
+    "Leitura":  "#34d399",
+}
+
 APP_COLORS = [
     "#a78bfa", "#60a5fa", "#4ade80", "#fb923c", "#f87171", "#fbbf24",
     "#94a3b8", "#34d399", "#38bdf8", "#c084fc", "#f472b6", "#facc15",
@@ -130,9 +142,10 @@ def process_data(rows):
             hour = t1.strftime("%H:00")
 
             if not is_audio:
-                screen_by_date[day][app] += diff
+                screen_app = SCREEN_APP_CATEGORY.get(app, app)
+                screen_by_date[day][screen_app] += diff
                 if day == today:
-                    hour_buckets[hour][app] += diff
+                    hour_buckets[hour][screen_app] += diff
                 if day >= week_start:
                     weekly_hours[day][hour] += diff
 
@@ -190,7 +203,7 @@ def build_payload():
         {
             "label": app,
             "data": [round(screen_by_date[d].get(app, 0) / 60, 1) for d in all_days],
-            "backgroundColor": APP_COLORS[idx % len(APP_COLORS)],
+            "backgroundColor": SCREEN_CATEGORY_COLORS.get(app, APP_COLORS[idx % len(APP_COLORS)]),
             "borderRadius": 6,
         }
         for idx, app in enumerate(screen_apps)
@@ -221,7 +234,7 @@ def build_payload():
         {
             "label": app,
             "data": [round(hour_buckets[h].get(app, 0) / 60, 1) for h in all_hours],
-            "backgroundColor": APP_COLORS[idx % len(APP_COLORS)],
+            "backgroundColor": SCREEN_CATEGORY_COLORS.get(app, APP_COLORS[idx % len(APP_COLORS)]),
             "borderRadius": 4,
         }
         for idx, app in enumerate(hour_apps)

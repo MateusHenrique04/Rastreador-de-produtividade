@@ -2,6 +2,12 @@
   "app_rules": [
     {
       "match": [
+        "zettlr"
+      ],
+      "app": "Zettlr"
+    },
+    {
+      "match": [
         "replit.com"
       ],
       "app": "Replit"

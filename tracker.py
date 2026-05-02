@@ -1,7 +1,7 @@
 from __future__ import annotations
 import time, sqlite3, logging, sys
 from datetime import datetime
-from classifier import split_app_context, is_audio_app, get_active_audio_process
+from classifier import split_app_context, is_audio_app, get_active_audio_process, get_window_title_by_process
 
 DB_NAME = "tracker.db"
 AUDIO_BACKGROUND_TIMEOUT = 60   # segundos sem foco antes de parar de contar áudio
@@ -233,8 +233,15 @@ def track():
 
                 elif active_audio_proc:
                     if not last_audio_app or active_audio_proc.lower() not in last_audio_app.lower():
-                        last_audio_app = active_audio_proc
-                        last_audio_ctx = "Tocando em segundo plano"
+                        # Tenta capturar o título real da janela em segundo plano
+                        bg_app, bg_title = get_window_title_by_process(AUDIO_PROCESS_KEYWORDS)
+                        last_audio_app = bg_app or active_audio_proc
+                        last_audio_ctx = bg_title or "Tocando em segundo plano"
+                    else:
+                        # Atualiza o contexto a cada poll (o vídeo pode ter mudado)
+                        bg_app, bg_title = get_window_title_by_process(AUDIO_PROCESS_KEYWORDS)
+                        if bg_title:
+                            last_audio_ctx = bg_title
                     last_audio_seen = now
                     save_log(conn, "audio", last_audio_app, last_audio_ctx, now)
 
