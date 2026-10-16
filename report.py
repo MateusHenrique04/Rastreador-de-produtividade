@@ -5,7 +5,7 @@ from datetime import datetime, date
 from classifier import classify_context
 
 DB_NAME = "tracker.db"
-MAX_GAP_SECONDS = 300
+MAX_GAP_SECONDS = 1800
 MIN_GAP_SECONDS = 5
 
 

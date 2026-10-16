@@ -18,7 +18,7 @@ from datetime import datetime, date
 from collections import defaultdict
 
 DB_NAME = "tracker.db"
-MAX_GAP = 300   # segundos (igual ao tracker)
+MAX_GAP = 1800   # segundos (igual ao tracker)
 MIN_GAP = 5
 
 
