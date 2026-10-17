@@ -7,9 +7,11 @@ __pycache__/
 venv/
 
 # Database file
-tracker.db
-tracker.log
-tracker.db-journal
+tracker.db*
+dashboard_cache.db*
+tracker.log*
+*.log*
+backup_tracker_*/
 
 # Ignore local scripts
 alterar.py
@@ -25,5 +27,3 @@ dashboard.html
 .vscode/
 .DS_Store
 
-tracker.db-shm
-tracker.db-wal
