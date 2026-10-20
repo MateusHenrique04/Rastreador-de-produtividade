@@ -8,6 +8,12 @@
     },
     {
       "match": [
+        "xournal"
+      ],
+      "app": "Xournal++"
+    },
+    {
+      "match": [
         "replit.com"
       ],
       "app": "Replit"

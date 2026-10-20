@@ -53,6 +53,7 @@ from classifier import (  # noqa: E402
     is_audio_app,
     get_active_audio_process,
     get_window_title_by_process,
+    app_from_process,
 )
 
 # ── Configuração ───────────────────────────────────────────────────────────────
@@ -263,6 +264,8 @@ class Tracker:
         idle = s.idle_seconds()
         title = s.active_window()
         app, context = s.split(title)
+        if app == "Outros":
+            app = app_from_process(get_active_process_name()) or app
         self.ticks += 1
 
         if app in GAME_APPS:
@@ -319,6 +322,17 @@ def run(tracker, stop, poll=POLL_INTERVAL):
 
 
 # ── Sensores do Windows ────────────────────────────────────────────────────────
+def get_active_process_name() -> str | None:
+    """Obtém o nome do processo executável da janela em foco no Windows."""
+    try:
+        import win32gui, win32process, psutil
+        _, pid = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+        return psutil.Process(pid).name()
+    except Exception as e:  # a API do Windows lança tipos variados; fica registrado no log
+        logger.debug("Processo da janela ativa indisponível: %s", e)
+        return None
+
+
 class _LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
 

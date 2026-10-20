@@ -2,6 +2,7 @@ import sqlite3
 import json
 import webbrowser
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime, date, timedelta
@@ -53,6 +54,16 @@ def fetch_afk_data():
     return {row[0]: row[1] for row in rows}
 
 
+def _xournal_document_name(context: str) -> str:
+    """'*Livro.pdf - Xournal++' -> 'Livro' ('*' = alterações não salvas)."""
+    name = re.sub(r"\s*[-–—]\s*Xournal\+\+\s*$", "", context.strip())
+    name = name.lstrip("*").strip()
+    for ext in (".pdf", ".xopp", ".xoj"):
+        if name.lower().endswith(ext):
+            name = name[: -len(ext)]
+    return name or "Documento sem título"
+
+
 def fetch_reading_data(rows):
     """
     Extrai dados de leitura do Google Books e Google Play Livros a partir dos logs de screen.
@@ -63,7 +74,7 @@ def fetch_reading_data(rows):
 
     # Função auxiliar para identificar se o log pertence a uma sessão de leitura
     def _is_reading(app_name, ctx):
-        if app_name in ("Google Books", "Google Play Livros", "Leitura"):
+        if app_name in ("Google Books", "Google Play Livros", "Leitura", "Xournal++"):
             return True
         c_lower = ctx.lower()
         reading_keywords = [
@@ -98,7 +109,7 @@ def fetch_reading_data(rows):
         reading_by_day[day] += diff
 
         # Extrai título do livro removendo sufixos do navegador e do serviço de leitura
-        title = context
+        title = _xournal_document_name(context) if app == "Xournal++" else context
         suffixes = [
             " - Google Play Livros - Brave",
             " - Google Play Livros - Google Chrome",

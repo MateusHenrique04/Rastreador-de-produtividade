@@ -13,6 +13,7 @@ e funções do dashboard original:
 import hashlib
 import json
 import os
+import re
 import socket
 import sqlite3
 import sys
@@ -160,6 +161,16 @@ def fetch_afk_data(since_days=None):
         return {r[0]: r[1] for r in c.fetchall()}
 
 
+def _xournal_document_name(context: str) -> str:
+    """'*Livro.pdf - Xournal++' -> 'Livro' ('*' = alterações não salvas)."""
+    name = re.sub(r"\s*[-–—]\s*Xournal\+\+\s*$", "", context.strip())
+    name = name.lstrip("*").strip()
+    for ext in (".pdf", ".xopp", ".xoj"):
+        if name.lower().endswith(ext):
+            name = name[: -len(ext)]
+    return name or "Documento sem título"
+
+
 # ── Bloco 4: Extração de Dados de Leitura (Google Books / Play Livros) ───────────
 def fetch_reading_data(rows):
     """
@@ -172,7 +183,7 @@ def fetch_reading_data(rows):
     book_times = defaultdict(float)
 
     def _is_reading(app_name, ctx):
-        if app_name in ("Google Books", "Google Play Livros", "Leitura"):
+        if app_name in ("Google Books", "Google Play Livros", "Leitura", "Xournal++"):
             return True
         c_lower = ctx.lower()
         reading_keywords = [
@@ -230,7 +241,7 @@ def fetch_reading_data(rows):
                 reading_by_day[day] += diff
 
                 # Limpeza do título do livro
-                title = p_ctx
+                title = _xournal_document_name(p_ctx) if p_app == "Xournal++" else p_ctx
                 for sfx in suffixes:
                     if title.endswith(sfx):
                         title = title[:-len(sfx)]

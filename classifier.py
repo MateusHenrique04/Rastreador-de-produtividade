@@ -57,6 +57,21 @@ def split_app_context(title: str) -> tuple[str, str]:
     return "Outros", title
 
 
+# Fallback por executável, usado quando o título da janela não contém o nome do app.
+# Chaves em minúsculas.
+PROCESS_APPS = {
+    "zettlr.exe": "Zettlr",
+    "xournalpp.exe": "Xournal++",
+}
+
+
+def app_from_process(process_name: str | None) -> str | None:
+    """Retorna o nome padronizado do aplicativo a partir do nome do executável."""
+    if not process_name:
+        return None
+    return PROCESS_APPS.get(process_name.lower())
+
+
 # ── Mapeamento app → domínio (tela) ───────────────────────────────────────────
 
 APP_DOMAIN = {
@@ -65,6 +80,7 @@ APP_DOMAIN = {
     "Estudo e Leitura":   "Literatura",
     "Okular":            "Literatura",
     "Google Books":       "Leitura",
+    "Xournal++":          "Leitura",
     "Zettlr":             "Escrita",
     "Gemini":             "Escrita",
     "VS Code":            "Tecnologia",
